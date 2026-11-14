@@ -1,0 +1,237 @@
+[package]
+name = "chuspa"
+version = "0.7.5"
+edition = "2024"
+description = "Gestor de contraseñas offline cifrado con Quipu. Bóveda local, respaldo en papel, sin nube."
+authors = ["Juan Carlos Isaza <isazajuancarlos@gmail.com>"]
+license = "AGPL-3.0-or-later"
+publish = false
+readme = "README.md"
+
+[dependencies]
+# `escrow` trae el reparto Shamir k-de-n, que es el método de recuperación
+# que no depende de un solo papel ni de un solo custodio.
+quipu = { path = "../quipu", features = ["escrow"] }
+# El respaldo en papel (BIP-39 + Reed-Solomon) vive en el núcleo.
+quipu-nucleo = { path = "../quipu/crates/quipu-nucleo", features = ["palabras"] }
+csv = "1"
+# Frontal de ESCRITORIO nativo (estándar de escritorio = GTK, como boza). La app
+# es GTK PURO: sin WebView, sin HTML, sin maud. El frontal viejo por tao+wry y
+# las plantillas maud se retiraron al alcanzar paridad (fase 3 de la migración).
+# GTK pasa a OPCIONAL durante la migración a egui (2026-10-04): el bin chuspa-gtk
+# va tras la feature `gtk-ui`, así chuspa-egui compila en Windows SIN las libs de
+# sistema de GTK4 (que ni siquiera están en scoop). El núcleo no usa GTK (solo el
+# bin lo importa), por eso gatearlo es limpio.
+gtk = { package = "gtk4", version = "0.9", features = ["v4_10"], optional = true }
+# Frontal egui: un solo .exe, sin runtime que empaquetar. Tema compartido huitaca.
+eframe = { version = "0.33", optional = true }
+huitaca = { path = "../huitaca", optional = true }
+# Diálogo de archivo NATIVO (elegir la bóveda por botón, no escribiendo la ruta).
+rfd = { version = "0.15", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# TOTP (RFC 6238): HMAC sobre SHA-1/256/512. SHA-1 sigue siendo el defecto de
+# la inmensa mayoría de los servicios, así que hay que soportarlo.
+# WebAuthn: las passkeys de Bitwarden son ECDSA P-256 (comprobado sobre las 19
+# reales), con la clave privada en PKCS#8. `p256` firma y lee ese formato.
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+base64ct = { version = "1", features = ["alloc"] }
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+# AES-128-CBC para descifrar el `os_crypt` de Chromium (Chrome/Brave/Edge) al
+# importar sus contraseñas guardadas. Es la MISMA crate que ya usa quipu, copiada
+# de su vendor (offline). El modo CBC y el PKCS7 se hacen a mano sobre el cifrador
+# de bloque —`cbc` y `pbkdf2` no hacían falta y no se añaden—.
+aes = "0.9"
+thiserror = "2"
+zeroize = { version = "1", features = ["derive", "serde"] }
+# DEFLATE en Rust puro, para la copia de seguridad. No es por gusto de formato:
+# `zstd` y compañía enlazan C, y aquí el árbol es Rust exclusivo. Se comprime el
+# CONTENIDO, nunca el archivo — el texto cifrado no se comprime (medido: una
+# bóveda de 6 513 bytes CRECE a 6 543 con `gzip -9`).
+miniz_oxide = { version = "0.9.1", default-features = false, features = ["with-alloc"] }
+
+# Canal provider<->agente del enlace con el navegador (passkeys) EN WINDOWS. En
+# Linux se usa `std::os::unix::net`; en Windows va sobre NAMED PIPES por nuestro
+# crate `chuspa-ipc-win`, que da la MISMA forma de API (`UnixListener`/`UnixStream`,
+# `try_clone`, `set_read_timeout`, `incoming`). Su `unsafe` es INTERNO del crate,
+# así que `unsafe_code = "forbid"` se conserva aquí.
+#
+# Antes era `uds_windows` (AF_UNIX nativo), y se cambió el 2026-10-10: el `connect`
+# AF_UNIX falla con WSAEINVAL (os 10022) cuando el llamante es el servidor COM del
+# proveedor de passkeys (activado por `svchost -Embedding`, MTA), aunque el mismo
+# connect va bien desde un proceso normal. Los named pipes son el IPC local que
+# Windows diseñó para cruzar el límite servicio<->proceso-de-usuario: quitan la
+# causa en vez de contenerla (D1). El pipe se aísla por una DACL propia (usuario
+# dueño + SYSTEM + Administradores), paridad con el `0600` del socket Unix.
+[target.'cfg(windows)'.dependencies]
+chuspa-ipc-win = { path = "ipc-win" }
+
+# EL FRONTAL SE PARTE POR PLATAFORMA, PERMANENTE (decisión de Juan, 2026-10-11):
+#   - LINUX   = chuspa-gtk  (GTK4). Es el producto que se empaqueta (RPM/DEB) y
+#     el que prueba el CI. El default aquí es `gtk-ui` porque esta es la máquina
+#     Linux: un `cargo build` pelado construye el producto Linux, y `cargo test`
+#     del CI mide el binario que de verdad se envía (directiva 31).
+#   - WINDOWS  = chuspa-egui (egui/eframe sobre huitaca), por si en algún momento
+#     se crea un .exe. Compila en todas partes; se construye con
+#     `cargo build --no-default-features --features egui-ui`.
+# NO hay "Fase 3 en que egui reemplaza a GTK": coexisten, uno por plataforma.
+# El CI compila-chequea egui aparte para que el frontal Windows no se pudra.
+[features]
+default = ["gtk-ui"]
+egui-ui = ["dep:eframe", "dep:huitaca", "dep:rfd"]
+gtk-ui = ["dep:gtk"]
+
+# Los bins se autodescubren, pero fijamos required-features para que cada frontal
+# solo compile con su stack. chuspa-puente (native messaging) no necesita ninguno.
+[[bin]]
+name = "chuspa-egui"
+required-features = ["egui-ui"]
+
+[[bin]]
+name = "chuspa-gtk"
+required-features = ["gtk-ui"]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+# Las DEPENDENCIAS optimizadas también en debug (estándar de nacimiento,
+# directiva 26). Faltaba: chuspa nació antes de que la línea subiera al estándar.
+#
+# Aquí paga, y está MEDIDO AQUÍ —no heredado de otro proyecto—. La directiva
+# avisa de que el `opt-level` no es universal: rinde en proporción a lo que pese
+# la EJECUCIÓN, y en chasqui y medico no movió el número. En chuspa sí, porque
+# Argon2id es *memory-hard*: lento a propósito, y sin optimizar el precio se
+# multiplica.
+#
+# La misma prueba (`la_pantalla_nueva_crea_cierra_y_abre`, que hace tres
+# derivaciones), en debug, con su control:
+#
+#   sin optimizar las dependencias .... 39,46 s
+#   con ellas optimizadas .............  4,66 s     8,5×
+#
+# Solo las dependencias, no el perfil entero: nuestros crates se quedan en debug
+# puro, con la iteración y el depurador intactos. Y no cambia QUÉ se prueba —
+# `debug_assertions` sigue activo con `opt-level > 0`.
+#
+# Solo las dependencias, no el perfil entero: nuestros crates se quedan en debug
+# puro, con la iteración y el depurador intactos.
+[profile.dev.package."*"]
+opt-level = 3
+
+# ---------------------------------------------------------------------------
+# Empaquetado RPM (openSUSE Tumbleweed / Fedora)
+# ---------------------------------------------------------------------------
+# El binario DEBE construirse en release: en debug, derivar la clave maestra
+# tarda 12 s en vez de 900 ms, y quien lo sufriera acabaría bajando el coste del
+# KDF por el motivo equivocado. `cargo generate-rpm` toma lo de `target/release`.
+[package.metadata.generate-rpm]
+summary = "Gestor de contrasenas offline cifrado con Quipu"
+license = "AGPL-3.0-or-later"
+assets = [
+  { source = "target/release/chuspa-gtk", dest = "/usr/bin/chuspa-gtk", mode = "755" },
+  # Lanzador de escritorio (freedesktop: GNOME, XFCE, KDE...) e icono.
+  { source = "empaque/chuspa.desktop", dest = "/usr/share/applications/chuspa.desktop", mode = "644" },
+  { source = "empaque/chuspa.svg", dest = "/usr/share/icons/hicolor/scalable/apps/chuspa.svg", mode = "644" },
+  { source = "target/release/chuspa-puente", dest = "/usr/bin/chuspa-puente", mode = "755" },
+  # Navegador seguro: abre enlaces del sistema en el perfil cifrado.
+  { source = "target/release/chuspa-navegar", dest = "/usr/bin/chuspa-navegar", mode = "755" },
+  { source = "empaque/chuspa-navegar.desktop", dest = "/usr/share/applications/chuspa-navegar.desktop", mode = "644" },
+  # Activador del navegador por defecto (lo corre el USUARIO, no el %post de root).
+  { source = "empaque/activar-navegador-seguro.sh", dest = "/usr/bin/chuspa-navegador-predeterminado", mode = "755" },
+  # El manifiesto va en la ruta del SISTEMA para que Firefox lo vea sin que cada
+  # usuario tenga que registrarlo. Restringe `allowed_extensions` al id de la
+  # extension: sin eso, cualquier complemento instalado podria pedir credenciales.
+  #
+  # SE INSTALA EN LAS DOS RUTAS, y no es redundancia: Firefox busca junto a donde
+  # esta instalado. La documentacion de Mozilla dice /usr/lib/mozilla, pero en
+  # openSUSE y Fedora el navegador vive en /usr/lib64/firefox y mira en
+  # /usr/lib64/mozilla. Con una sola ruta, la extension dice «no se pudo hablar
+  # con la aplicacion» aunque todo lo demas funcione — comprobado en Tumbleweed.
+  { source = "empaque/com.xiliux.chuspa.json", dest = "/usr/lib/mozilla/native-messaging-hosts/com.xiliux.chuspa.json", mode = "644" },
+  { source = "empaque/com.xiliux.chuspa.json", dest = "/usr/lib64/mozilla/native-messaging-hosts/com.xiliux.chuspa.json", mode = "644" },
+  # Lo mismo para los navegadores de la familia Chrome, que tampoco miran las
+  # rutas de los otros: Brave, Chrome y Chromium tienen cada uno la suya. Aqui la
+  # autorizacion va por `allowed_origins` con el identificador de la extension,
+  # que es FIJO porque el manifiesto lleva su clave publica — sin ella lo
+  # derivaria del camino en disco y mover la carpeta lo cambiaria en silencio.
+  # La prueba `el_manifiesto_del_sistema_apunta_a_la_extension_de_verdad` vigila
+  # que este identificador no se separe de esa clave.
+  { source = "empaque/com.xiliux.chuspa.chrome.json", dest = "/etc/brave/native-messaging-hosts/com.xiliux.chuspa.json", mode = "644" },
+  { source = "empaque/com.xiliux.chuspa.chrome.json", dest = "/etc/opt/chrome/native-messaging-hosts/com.xiliux.chuspa.json", mode = "644" },
+  { source = "empaque/com.xiliux.chuspa.chrome.json", dest = "/etc/chromium/native-messaging-hosts/com.xiliux.chuspa.json", mode = "644" },
+  # La extension va por PATRON y no fichero a fichero. Enumerada a mano se quedo
+  # en los tres archivos originales, y los tres que se anadieron despues
+  # —fondo.js, passkeys.js, puente-passkeys.js— no viajaban en el paquete: quien
+  # instalara la extension desde aqui tenia las llaves de acceso muertas y ni un
+  # solo error que lo dijera. La prueba `el_rpm_lleva_la_extension_entera` vigila
+  # que el patron siga cubriendolo todo.
+  { source = "extension/*", dest = "/usr/share/chuspa/extension/", mode = "644" },
+  { source = "NOTICE", dest = "/usr/share/doc/chuspa/NOTICE", mode = "644" },
+  { source = "README.md", dest = "/usr/share/doc/chuspa/README.md", mode = "644" },
+]
+
+# Soft-deps del navegador seguro ("Abrir y navegar"): gocryptfs cifra el volumen
+# del perfil y firefox lo abre. Recommends y NO Requires: chuspa como gestor de
+# contrasenas funciona sin ellos; solo esa funcion los usa. (cargo-generate-rpm
+# pide las dependencias como TABLA, nombre = version.)
+[package.metadata.generate-rpm.recommends]
+gocryptfs = "*"
+firefox = "*"
+
+
+# ---------------------------------------------------------------------------
+# Empaquetado DEB (Debian / Ubuntu)  —  GEMELO del bloque generate-rpm de arriba
+# ---------------------------------------------------------------------------
+# Se construye con `cargo deb` y toma los binarios de `target/release`: en debug
+# derivar la clave maestra tarda 12 s en vez de 900 ms (mismo motivo que el RPM).
+#
+# Diferencias con el RPM, todas por la distribución, no por gusto:
+#   - Firefox en Debian mira `/usr/lib/mozilla` y NO existe `/usr/lib64`, así que
+#     el manifiesto va en UNA sola ruta (en el RPM iba en las dos).
+#   - `depends = "$auto"` deja que cargo-deb lea el ELF y resuelva las bibliotecas
+#     de GTK4 (libgtk-4-1, libglib...), en vez de fijar a mano una lista que
+#     envejece a cada versión de la distro.
+[package.metadata.deb]
+maintainer = "Juan Carlos Isaza <isazajuancarlos@gmail.com>"
+copyright = "2026 Juan Carlos Isaza"
+license-file = ["NOTICE", "0"]
+section = "utils"
+priority = "optional"
+depends = "$auto"
+# Soft-deps del navegador seguro: gocryptfs (volumen cifrado del perfil) y
+# firefox. En Debian el paquete es firefox-esr; en Ubuntu, firefox. Recommends,
+# no Depends: el gestor de contraseñas funciona sin ellos.
+recommends = "gocryptfs, firefox | firefox-esr"
+extended-description = """\
+Gestor de contraseñas offline: una bóveda local cifrada con Quipu, sin nube, sin \
+cuenta y sin ningún puerto abierto. Incluye `chuspa-puente`, el puente de native \
+messaging que conecta la extensión del navegador (Firefox y familia Chrome) con \
+la aplicación, y los manifiestos que autorizan SOLO a la extensión de Chuspa."""
+assets = [
+  ["target/release/chuspa-gtk", "usr/bin/", "755"],
+  ["target/release/chuspa-puente", "usr/bin/", "755"],
+  ["target/release/chuspa-navegar", "usr/bin/", "755"],
+  # Lanzador de escritorio (freedesktop: GNOME, XFCE, KDE...) e icono.
+  ["empaque/chuspa.desktop", "usr/share/applications/", "644"],
+  ["empaque/chuspa-navegar.desktop", "usr/share/applications/", "644"],
+  ["empaque/activar-navegador-seguro.sh", "usr/bin/chuspa-navegador-predeterminado", "755"],
+  ["empaque/chuspa.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+  # Firefox: ruta del sistema, una sola en Debian. `allowed_extensions` restringe
+  # el puente al id de la extensión y a ningún otro complemento.
+  ["empaque/com.xiliux.chuspa.json", "usr/lib/mozilla/native-messaging-hosts/", "644"],
+  # Familia Chrome: cada navegador tiene su propio /etc. La autorización va por
+  # `allowed_origins` con el id FIJO derivado de la clave pública del manifiesto.
+  ["empaque/com.xiliux.chuspa.chrome.json", "etc/brave/native-messaging-hosts/com.xiliux.chuspa.json", "644"],
+  ["empaque/com.xiliux.chuspa.chrome.json", "etc/opt/chrome/native-messaging-hosts/com.xiliux.chuspa.json", "644"],
+  ["empaque/com.xiliux.chuspa.chrome.json", "etc/chromium/native-messaging-hosts/com.xiliux.chuspa.json", "644"],
+  # La extensión, por PATRÓN de extensión de archivo (js/json/html): coge los 7
+  # ficheros reales de runtime y deja fuera `extension/banco/`, que es el arnés de
+  # pruebas en Python. Un fichero nuevo con esas extensiones entra solo.
+  ["extension/*.js", "usr/share/chuspa/extension/", "644"],
+  ["extension/*.json", "usr/share/chuspa/extension/", "644"],
+  ["extension/*.html", "usr/share/chuspa/extension/", "644"],
+  ["NOTICE", "usr/share/doc/chuspa/NOTICE", "644"],
+  ["README.md", "usr/share/doc/chuspa/README.md", "644"],
+]

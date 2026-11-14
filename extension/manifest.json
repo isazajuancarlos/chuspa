@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "Chuspa",
+  "version": "0.7.5",
+  "description": "Llaves de acceso (passkeys) de Chuspa. La bóveda vive en la aplicación, no en el navegador.",
+  "author": "Juan Carlos Isaza",
+  "homepage_url": "https://github.com/isazajuancarlos/chuspa",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "chuspa@xiliux.com",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "permissions": [
+    "nativeMessaging"
+  ],
+  "action": {
+    "default_title": "Chuspa",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  },
+  "background": {
+    "scripts": [
+      "fondo.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "puente-passkeys.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://*/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "passkeys.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    }
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*"
+  ]
+}

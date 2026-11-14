@@ -1,0 +1,134 @@
+# cargo-deny — control de cadena de suministro.
+#
+# NACE EL 2026-08-13. chuspa era el ÚNICO repositorio Rust de la casa sin NINGÚN
+# verde declarado —ni `ci.yml` ni `deny.toml`—, y no es un detalle de higiene:
+# es el producto que guarda **contraseñas, passkeys y semillas TOTP**. Su
+# superficie de dependencias es la que menos puede permitirse ganar una fuente
+# que nadie mira.
+#
+# Lo que este archivo protege NO es el árbol de hoy —hoy está limpio, medido al
+# escribirlo— sino el de la próxima subida: sin él, el `Cargo.lock` puede ganar
+# un registro o un `git` desconocido y salir verde en todo lo demás. Ese fue
+# exactamente el caso de chasqui y medico el 2026-08-13, donde la migración del
+# arnés de pruebas metió una dependencia `git` nueva y `source-not-allowed` la
+# cazó; inventario, que no tenía el archivo, no se enteró.
+
+# El gate audita AMBOS frontales. chuspa tiene dos: `chuspa-gtk` (Linux, default) y
+# `chuspa-egui` (Windows, feature `egui-ui`). Sin esto `cargo deny` solo recorría el
+# grafo de features DEFAULT = GTK, y el suministro del frontal de Windows (egui y su
+# pila: accesskit → zbus/zvariant, winit, las fuentes de epaint/ab_glyph) quedaba SIN
+# auditar — un verde que no medía la mitad del producto (D30). `all-features = true`
+# recorre la UNIÓN de los dos. Puesto el 2026-10-20; destapó tres unmaintained
+# (zvariant/zbus_names/zvariant_derive) que llevaban sin mirarse, ya enumeradas abajo.
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+
+# CUATRO, TODAS del árbol egui/Windows (`eframe`→`egui`→`epaint`/`accesskit`) y TODAS
+# `informational = "unmaintained"` — cero vulnerability, cero unsound. Antes, con la
+# ventana en GTK4 puro, esto estaba vacío.
+#
+# `ttf-parser` (fuentes empotradas, vía `ab_glyph`/`epaint`) la autorizó Juan el
+# 2026-10-04 tras el concilio. Las TRES de la pila D-Bus de accesibilidad —`zvariant`,
+# `zbus_names`, `zvariant_derive`, vía `accesskit`→`atspi`→`zbus`— el 2026-10-20, al
+# EXTENDER el gate a este grafo con `[graph] all-features = true` (arriba). Hasta ese
+# día el gate solo recorría el grafo GTK (default) y estas tres —frescas, 2026-10-16—
+# no las miraba NADIE: `cargo deny` salía verde y hasta marcaba el `ignore` de
+# `ttf-parser` como `advisory-not-detected`, porque el frontal de Windows quedaba fuera
+# del grafo auditado (punto ciego D30).
+#
+# HISTORIA: entraron cuatro el 2026-10-04 con la migración a egui; TRES se retiraron el
+# 2026-10-07 al subir `eframe`/`egui` 0.29 → 0.33.3 (el salto soltó `paste`
+# RUSTSEC-2024-0436 y el `quick-xml` vulnerable RUSTSEC-2026-0194/0195) — las cazó
+# `guardia-supresiones`, NO `cargo deny`, que sale verde igual con un ignore inerte
+# (lado ciego D33).
+#
+# Se enumeran una a una —no se silencia la clase con `unmaintained = "workspace"`— para
+# que un aviso NUEVO ponga esto rojo (D23). Caducidad y rastreo en `supresiones.toml`,
+# que `guardia-supresiones` exige en biyección con este `ignore`.
+ignore = [
+    "RUSTSEC-2026-0192", # ttf-parser — sin mantener (ab_glyph → epaint → egui)
+    "RUSTSEC-2026-0370", # zvariant — sin mantener (accesskit → atspi → zbus, egui)
+    "RUSTSEC-2026-0371", # zbus_names — sin mantener (accesskit → atspi → zbus, egui)
+    "RUSTSEC-2026-0372", # zvariant_derive — sin mantener (accesskit → atspi → zbus, egui)
+]
+
+# `chacha20 0.10.1` sale como `warning[yanked]`, NO como error, así que no tumba la
+# puerta y no se ignora aquí. Llega por `chacha20poly1305 0.11.0` → `quipu` (no por
+# chuspa), y `cargo update` no lo mueve desde este árbol: la versión no-yanked la
+# decide quipu. Queda como aviso visible a propósito, para no esconder que está ahí.
+
+[licenses]
+version = 2
+# Allowlist AJUSTADA al árbol real (directiva 23): una licencia nueva en una
+# subida = rojo, y se decide a mano si entra. No se pre-aprueban licencias
+# ausentes «por si acaso» — eso convierte el guardián en un sello.
+#
+# ESO LO DECÍA ESTE COMENTARIO Y ERA FALSO CUANDO SE ESCRIBIÓ. La lista venía
+# copiada de `inventario`, y la revisión del 2026-08-13 la midió quitando cada
+# entrada y volviendo a correr `cargo deny check licenses`. Sobraban CUATRO
+# —`ISC`, `Unlicense`, `BSL-1.0` y `BSD-2-Clause`—: `ISC` no aparece en ninguna
+# expresión de licencia de los 352 paquetes, y las otras tres solo dentro de un
+# `OR` que MIT o Apache-2.0 ya satisfacen. Se van.
+#
+# LAS QUE QUEDAN ESTÁN MEDIDAS UNA A UNA, y las tres últimas son el control de
+# que el instrumento discrimina — sin ellas `licenses` se pone en FAILED:
+#
+#     sin MPL-2.0 ......... FAILED        sin ISC ............. ok
+#     sin Zlib ............ FAILED        sin Unlicense ....... ok
+#     sin BSD-3-Clause .... FAILED        sin BSL-1.0 ......... ok
+#                                         sin BSD-2-Clause .... ok
+#
+# El riesgo legal de las cuatro que sobraban era nulo —son permisivas—; el
+# defecto era que el archivo describía una precisión que no tenía, que es el
+# modo de fallo que más caro sale porque nadie lo va a comprobar dos veces.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+    # DE CASA: `chuspa`, y `quipu` + `quipu-nucleo`, que entran por `path` desde
+    # el repositorio hermano. Los tres son AGPL-3.0-or-later. Sin esta línea
+    # `cargo deny` rechaza el propio repositorio, que es el primer sitio donde
+    # una allowlist copiada de otro proyecto se estrella.
+    "AGPL-3.0-or-later",
+    # DEL ÁRBOL DE EGUI (migración del frontal a egui, 2026-10-04). El comentario
+    # de arriba decía que `ISC`, `BSL-1.0` y `BSD-2-Clause` «sobraban» —y era cierto
+    # para la ventana GTK pura—; `eframe`/`egui` y su pila (accesskit, winit, glutin,
+    # las fuentes empotradas por epaint) las reintrodujeron. Todas son PERMISIVAS y
+    # las autorizó Juan el 2026-10-04. Siguen enumeradas una a una: quitar una que
+    # el árbol use vuelve a poner `licenses` en FAILED (la discriminación se conserva).
+    "ISC",             # crates del árbol egui/winit
+    "BSD-2-Clause",    # crates del árbol egui
+    "BSL-1.0",         # Boost Software License — del árbol egui
+    # Fuentes que `epaint`/`ab_glyph` empotran en el binario (su licencia es
+    # `(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`): el `OR` lo cubre
+    # MIT/Apache, pero el `AND` exige además estas dos. Son licencias de FUENTES,
+    # no de código, y permisivas. (La misma licencia que Juan autorizó el
+    # 2026-10-04: antes solo existía como LicenseRef-UFL-1.0, pero SPDX oficializó
+    # el id `Ubuntu-font-1.0` y cargo-deny 0.20.2 la reporta así — es id-match, no
+    # una licencia nueva.)
+    "OFL-1.1",          # SIL Open Font License 1.1
+    "Ubuntu-font-1.0",  # Ubuntu Font License 1.0 — id SPDX oficial (antes LicenseRef-UFL-1.0)
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"   # avisa de versiones duplicadas (superficie + peso)
+wildcards = "deny"           # prohíbe version = "*" en deps EXTERNAS
+allow-wildcard-paths = true  # …pero no en los internos por `path` (son nuestros)
+
+[sources]
+# Una dependencia desde una fuente inesperada = rojo.
+unknown-registry = "deny"
+unknown-git = "deny"
+# CERO dependencias por git: el árbol vuelve a no tener ninguna. `mirilla` (el
+# banco de pantalla por CDP) era la única, y se fue con la ventana wry en la fase
+# 3 de la migración a GTK. El día que vuelva a aparecer una, se escribe aquí de
+# dónde viene y por qué (va al ESPEJO local, protocolo solo-local).
+allow-git = []

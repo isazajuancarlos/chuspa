@@ -1,0 +1,7 @@
+{
+  "name": "com.xiliux.chuspa",
+  "description": "Puente entre Firefox y la aplicacion Chuspa",
+  "path": "/usr/bin/chuspa-puente",
+  "type": "stdio",
+  "allowed_extensions": ["chuspa@xiliux.com"]
+}

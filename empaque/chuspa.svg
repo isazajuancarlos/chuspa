@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<!-- Una chuspa: la bolsita andina donde se guarda lo que vale. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="tela" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8d5524"/>
+      <stop offset="1" stop-color="#5c3317"/>
+    </linearGradient>
+  </defs>
+  <!-- El cordón -->
+  <path d="M20 18 C20 8, 44 8, 44 18" fill="none" stroke="#c9a227" stroke-width="3" stroke-linecap="round"/>
+  <!-- El cuerpo de la bolsa -->
+  <path d="M16 20 h32 l4 28 a6 6 0 0 1 -6 8 h-28 a6 6 0 0 1 -6 -8 z" fill="url(#tela)"/>
+  <!-- La franja tejida -->
+  <rect x="12" y="32" width="40" height="6" fill="#c9a227" opacity="0.85"/>
+  <rect x="12" y="41" width="40" height="3" fill="#a63d2f" opacity="0.8"/>
+  <!-- La boca, cerrada -->
+  <rect x="14" y="17" width="36" height="6" rx="3" fill="#4a2711"/>
+</svg>

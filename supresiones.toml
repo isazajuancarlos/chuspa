@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Supresiones de advisories de cargo-deny, con CADUCIDAD y RASTREO — el sidecar
+# que `deny.toml[advisories].ignore` no admite.
+#
+# Lo vigila `guardia-supresiones` (Z:/conocimiento/guardia-supresiones), pata
+# determinista del `concilio` y de `revisar-seguridad`. Exige tres invariantes:
+#   1. BIYECCIÓN con `deny.toml[advisories].ignore` (toda supresión justificada,
+#      y todo ignore con supresión);
+#   2. NO CADUCADA (pasada su `hasta`, se re-justifica o se quita);
+#   3. NO INERTE (que cada id siga casando HOY una advisory viva — el lado ciego
+#      D33 que `cargo deny check` no ve: un ignore que ya no casa sale verde).
+#
+# CUATRO supresiones vivas, TODAS unmaintained del árbol egui/Windows. `ttf-parser`
+# (2026-10-04); y `zvariant`/`zbus_names`/`zvariant_derive` (2026-10-20), que
+# aparecieron al EXTENDER el gate a este grafo con `[graph] all-features = true`:
+# antes el gate solo recorría GTK y no las miraba (punto ciego D30).
+#
+# Antes de hoy hubo cuatro INERTES que se retiraron: con la migración a egui entraron
+# cuatro (2026-10-04); TRES (`paste` RUSTSEC-2024-0436 y `quick-xml`
+# RUSTSEC-2026-0194/0195) quedaron INERTES el 2026-10-07 al subir eframe/egui
+# 0.29 → 0.33.3 —ese salto las sacó del árbol— y `guardia-supresiones` las cazó; se
+# retiraron de aquí y de `deny.toml`.
+#
+# La justificación larga y medida vive en `deny.toml` (sección [advisories]); aquí
+# va el porqué en una línea + la fecha de re-juicio (6 meses desde la autorización
+# de Juan: 2027-04-04 para ttf-parser, 2027-04-20 para las tres de D-Bus).
+
+[[supresion]]
+id = "RUSTSEC-2026-0192"
+motivo = "`ttf-parser` 0.25.1 — sin mantener (unmaintained), NO vulnerable: cero vulnerability, cero unsound. Llega por ab_glyph → epaint → egui para medir las fuentes empotradas en el binario."
+hasta = "2027-04-04"
+rastreo = "deny.toml[advisories].ignore · upstream RazrFalcon/ttf-parser (sin mantener)"
+
+[[supresion]]
+id = "RUSTSEC-2026-0370"
+motivo = "`zvariant` — sin mantener (unmaintained), NO vulnerable: cero vulnerability, cero unsound. Llega por accesskit → atspi → zbus (accesibilidad del frontal egui de Windows). Solo en el grafo egui-ui, no en GTK."
+hasta = "2027-04-20"
+rastreo = "deny.toml[advisories].ignore · pila zbus/zvariant de accesskit-atspi (egui)"
+
+[[supresion]]
+id = "RUSTSEC-2026-0371"
+motivo = "`zbus_names` — sin mantener (unmaintained), NO vulnerable: cero vulnerability, cero unsound. Llega por accesskit → atspi → zbus (accesibilidad del frontal egui de Windows). Solo en el grafo egui-ui, no en GTK."
+hasta = "2027-04-20"
+rastreo = "deny.toml[advisories].ignore · pila zbus/zvariant de accesskit-atspi (egui)"
+
+[[supresion]]
+id = "RUSTSEC-2026-0372"
+motivo = "`zvariant_derive` — sin mantener (unmaintained), NO vulnerable: cero vulnerability, cero unsound. Llega por accesskit → atspi → zbus (accesibilidad del frontal egui de Windows). Solo en el grafo egui-ui, no en GTK."
+hasta = "2027-04-20"
+rastreo = "deny.toml[advisories].ignore · pila zbus/zvariant de accesskit-atspi (egui)"

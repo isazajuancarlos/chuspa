@@ -1,0 +1,162 @@
+# EL VERDE LOCAL DE `chuspa`. NO lo corre GitHub.
+#
+# Actions está apagado en toda la cuenta desde el protocolo «solo local»
+# (2026-08-10), así que este archivo no se ejecuta en ningún runner. Existe
+# porque **es la definición del verde**, y la lee `conocimiento/cupo/verde_local.py`:
+#
+#     python3 /mnt/data/conocimiento/cupo/verde_local.py chuspa
+#
+# Ese guion abre este archivo, saca los `run:` en su orden y los ejecuta, para
+# que «el comando exacto del CI» no sea una frase que se copia a mano y envejece.
+#
+# POR QUÉ NACE EL 2026-08-13, y es el que más tarde llega: chuspa era el ÚNICO
+# repositorio Rust de la casa sin NINGÚN verde declarado —ni este archivo ni
+# `deny.toml`—, así que `verde_local.py chuspa` contestaba «NO EXISTE». Y es el
+# producto que guarda contraseñas, passkeys y semillas TOTP.
+#
+# LOS PASOS LLEVAN `name:`, Y NO ES ESTILO: `verde_local.py` registra los saltos
+# por NOMBRE, así que un paso sin él no se puede saltar ni nombrar en el informe.
+name: CI
+on:
+  push:
+    branches: [desarrollo]
+  pull_request:
+    branches: [desarrollo]
+
+# LA RAMA QUE SE PUBLICA SE EXCLUYE CON EL GRUPO, NO CON LA BANDERA.
+# `cancel-in-progress: false` no cancela la corrida EN CURSO, pero sí las
+# ENCOLADAS, así que con tres merges seguidos el commit de en medio no se mide
+# jamás mientras la rama se ve verde. Dándole a cada commit de `desarrollo` su
+# propio grupo, la promesa se cumple de verdad.
+#
+# (Aquí la rama principal es `desarrollo`, no `main`.)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}${{ github.ref == 'refs/heads/desarrollo' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/desarrollo' }}
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    # El techo, no la duración esperada. Sin él, una prueba colgada se come los
+    # 360 minutos por defecto. Es la lección de quipu: su job `test + clippy`
+    # pasó de 4 a 48 minutos entre julio y agosto de 2026, de tres en tres, y
+    # nadie lo vio nunca porque un CI lento sale verde igual que uno rápido.
+    timeout-minutes: 20
+    steps:
+      # ESTOS DOS `uses:` NO ESTÁN ANCLADOS A SHA, y la regla de la casa dice
+      # que toda acción de terceros va anclada a sus 40 dígitos: `@v4` es una
+      # etiqueta MUTABLE y `@stable` es una RAMA, que es la forma más móvil que
+      # existe. Hoy es INERTE —Actions está apagado en toda la cuenta y
+      # `verde_local.py` solo extrae los `run:`, así que estas dos líneas no se
+      # ejecutan en ninguna parte— y por eso no se anclan a un SHA inventado
+      # que nadie podría verificar. Queda escrito porque este archivo se
+      # declara «la definición del verde» y sobrevivirá al día que vuelva a
+      # haber runner: ESE día, antes de nada, se anclan.
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      # DEBUG Y RELEASE, Y EL MOTIVO ES NUEVO — antes no habría cabido.
+      #
+      # El `CLAUDE.md` de este repositorio decía «SIEMPRE --release: Argon2id
+      # tarda 900 ms en release y 12 s en debug». Eso era cierto y dejó de
+      # serlo en esta misma rama: al entrar `[profile.dev.package."*"]
+      # opt-level = 3`, el KDF —que vive en `quipu`, o sea en una DEPENDENCIA—
+      # se compila optimizado también en el perfil dev.
+      #
+      # Medido el 2026-08-13, banco entero, 325 pruebas en 21 suites las dos
+      # veces:  release 36,0 s  ·  debug 46,1 s.  Diez segundos.
+      #
+      # Y por eso vale la pena: `debug_assertions` y las optimizaciones cambian
+      # caminos, y el binario que se instala en casa del cliente es el de
+      # release — una suite que solo corre en un perfil mide un binario distinto
+      # del que se entrega (directiva 31).
+      - name: Pruebas (debug)
+        run: cargo test --no-fail-fast
+
+      - name: Pruebas (release)
+        run: cargo test --release --no-fail-fast
+
+      # `chuspa-ipc-win` (el transporte named pipe en Windows) es dependencia POR
+      # RUTA, no miembro de workspace, así que `cargo test` de arriba NO corre sus
+      # pruebas — y ahí vive el aislamiento del pipe (anti-okupación, DACL). Se
+      # corre aparte por `--manifest-path` para que su banco entre en el verde
+      # (concilio 2026-10-10, D30/D31). En Linux el crate es `cfg(windows)` vacío
+      # → 0 pruebas; en Windows corre su banco completo, que es la plataforma de
+      # referencia de este transporte.
+      - name: Pruebas (ipc-win, named pipe Windows)
+        run: cargo test --release --no-fail-fast --manifest-path ipc-win/Cargo.toml
+
+      # `--release` aquí no es copiar el paso de arriba: clippy con
+      # optimizaciones activa lintes que en debug no se evalúan igual, y es como
+      # está declarado en el CLAUDE.md de este repositorio desde que existe.
+      - name: Clippy
+        run: cargo clippy --all-targets --release -- -D warnings
+
+      # EL FRONTAL WINDOWS (chuspa-egui) SE COMPILA-CHEQUEA AQUÍ para que no se
+      # pudra. El default es `gtk-ui` (el producto Linux, que es lo que todo lo
+      # de arriba mide), así que sin este paso el árbol egui —el .exe de Windows,
+      # por si se crea— podría romperse en Linux sin que nadie lo viera hasta
+      # abrir Windows. No hay runner Windows; este clippy en Linux es la red.
+      - name: Clippy (frontal Windows egui)
+        run: cargo clippy --no-default-features --features egui-ui --all-targets --release -- -D warnings
+
+      # CADENA DE SUMINISTRO. Configuración en `deny.toml`, que nace el mismo
+      # día y con su lista de once excepciones documentadas una a una.
+      #
+      # `cargo deny check` cubre las cuatro puertas: `advisories` (la base de
+      # RustSec), `licenses`, `bans` y `sources`. La que de verdad falta en
+      # todas partes hasta que se pone es `sources`: sin ella el `Cargo.lock`
+      # puede ganar un registro o un `git` desconocido y salir verde en todo lo
+      # demás. Fue exactamente lo que cazó en chasqui y medico el 2026-08-13.
+      #
+      # NO hay paso de `cargo audit`, y es deliberado: `deny check advisories`
+      # consulta la MISMA base de RustSec. Dos pasos que miden lo mismo no
+      # duplican la protección, duplican el ruido, y a la segunda alarma
+      # repetida nadie mira ninguna de las dos (directiva 23).
+      # LA VERSIÓN VA FIJADA, y `--locked` NO bastaba: fija las dependencias
+      # DE cargo-deny a su propio lockfile, no la versión de cargo-deny. Sin
+      # `--version`, este paso baja y COMPILA el último cargo-deny publicado
+      # —código recién descargado de crates.io— en la máquina que guarda la
+      # bóveda, cada vez que se corre el verde. Y lo hace el paso cuyo trabajo
+      # es precisamente vigilar la cadena de suministro, dentro del protocolo
+      # cuyo motivo declarado son ChainDrop y Shai-Hulud. Lo cazó la revisión
+      # de seguridad del 2026-08-13.
+      #
+      # 0.20.2 es lo que hay instalado y con lo que se midió todo lo de abajo.
+      # Subirlo es una decisión con su motivo, no inercia (directiva 35).
+      - name: Instalar cargo-deny
+        run: cargo install cargo-deny --version 0.20.2 --locked
+      - name: Cadena de suministro
+        run: cargo deny check
+
+      # La ventana ya no es HTML: es GTK4 nativo (`chuspa-gtk`), retirada la
+      # capa `wry`/`maud` en la fase 3 de la migración. El banco de dibujo por
+      # `mirilla`+CDP (que envolvía `atender_ruta`) se fue con ella. Dibujar los
+      # widgets GTK necesita otro instrumento (backend broadway o Xvfb) que aún
+      # no está montado; hoy la lógica se verifica cruzando la frontera del
+      # núcleo (cifrado+disco) y el agente por su socket.
+
+      # NO HAY `cargo fmt --check`. Ninguno de los nueve repositorios Rust de la
+      # casa lo incluye: ningún árbol se formateó nunca con el rustfmt por
+      # defecto y no hay `rustfmt.toml` que fije otro estilo, así que el paso
+      # nacería ROJO. Un verde que nace rojo se acaba silenciando con un
+      # `|| true`, y entonces el archivo miente sobre lo que mide.
+
+      # LA VENTANA YA SE MIDE desde el 2026-08-14 (paso «Dibujar la ventana»),
+      # cerrando lo que este comentario declaraba como el hueco de la directiva
+      # 28 en chuspa. Se resolvió envolviendo `atender_ruta` en un servidor
+      # loopback de prueba, porque el WebView de `wry` no habla CDP.
+      #
+      # LO QUE ESTE VERDE **NO** MIDE, dicho aquí para que no se dé por medido:
+      #
+      # - La EXTENSIÓN. `npx addons-linter extension/` es el filtro de Mozilla y
+      #   no está aquí: necesita red y npm, y este stack retiró npm el
+      #   2026-08-10. Se corre a mano antes de firmar en AMO. El banco
+      #   `extension/banco/` (Firefox real vía `web-ext`) es el otro manual.
+      #
+      # YA NO HAY paso de `node`: el test que lanzaba `node --test puente.test.js`
+      # se retiró con el WebView/puente JS en la migración a GTK4 (ya no hay
+      # `wry`/`maud`/estáticos JS). El verde no toca node en ningún paso.

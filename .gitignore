@@ -1,0 +1,39 @@
+/target
+Cargo.lock.bak
+
+# Nunca en el repositorio: son bóvedas y exports con contraseñas en claro.
+# La lista es amplia a propósito. El coste de ignorar de más es tener que forzar
+# un `git add`; el de ignorar de menos es publicar una bóveda entera.
+*.csv
+*.json.bitwarden
+*.encrypted_json
+bitwarden_export*
+/boveda*.chuspa
+# El cerrojo de archivo que deja una bóveda abierta: transitorio, y `*.chuspa`
+# no lo cazaba por el sufijo `.lock`.
+*.chuspa.lock
+# La copia de seguridad CIFRADA que produce `src/copia.rs` (comprimir → Padmé →
+# cifrar). Es un blob de datos reales; jamás al repositorio. `/copia` caza el
+# archivo sin extensión del ejemplo CLI; `*.chuspacopia`, el que escribe el
+# frontal (y el que documenta `examples/copia_de_seguridad.rs`).
+/copia
+*.chuspacopia
+/exports/
+
+# Excepción: los CSV de prueba llevan datos INVENTADOS y sí van al repositorio.
+!tests/datos/*.csv
+
+# El respaldo de conversaciones que deja el hook al terminar el turno. Es un
+# volcado literal de la sesión, y esta sesión ha tenido delante contraseñas de
+# prueba, rutas de bóvedas y el contenido de los archivos. En un repositorio de
+# un gestor de contraseñas eso no entra ni una vez.
+/conversaciones/
+
+# La clave que fija el identificador de la extensión de Chrome. Solo hace falta
+# para firmar un `.crx`; la pública va en el manifiesto y es la que se usa.
+*.pem
+
+# --- vendor/: árbol GENERADO; ninguna regla de arriba le aplica ---
+# Solo se ve CLONANDO: `git status` no lista lo ignorado, y reglas globales
+# como `target/`, `*.bin`, `*.key` o `*.pem` se tragan archivos legítimos.
+!vendor/**

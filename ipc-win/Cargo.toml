@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 Juan Carlos Isaza
+#
+# El transporte local provider<->agente de Chuspa EN WINDOWS, sobre NAMED PIPES.
+# Crate SEPARADO a propósito: aquí vive el `unsafe` del FFI Win32, igual que en
+# `proveedor-win`, para que el núcleo (`chuspa`) conserve `unsafe_code = "forbid"`.
+#
+# Por qué named pipe y no AF_UNIX: el `connect` AF_UNIX (via `uds_windows`) falla
+# con WSAEINVAL (os 10022) cuando el llamante es el servidor COM activado por
+# `svchost -Embedding` (MTA), aunque el MISMO connect va bien desde un proceso
+# normal. Los named pipes son el IPC local que Windows diseñó para cruzar el
+# límite servicio<->proceso-de-usuario, así que quitan la causa en vez de
+# contenerla (D1). Da la MISMA forma de API que `std::os::unix::net`
+# (`UnixListener`/`UnixStream`, `incoming`, `try_clone`, `set_read_timeout`,
+# `Read`/`Write`), así que el cuerpo de `escuchar_en`/`consultar_al_agente` no
+# cambia: solo el `use` por plataforma.
+#
+# CERO dependencias de terceros: declara las funciones Win32 a mano (kernel32 va
+# por defecto; advapi32 por `#[link]`). El pipe se aísla por una DACL que solo
+# concede al usuario dueño + SYSTEM + Administradores (paridad con el 0600 del
+# socket Unix) — el SD por defecto de un named pipe da LECTURA a Everyone, que
+# para un IPC de passkeys sería una fuga.
+[package]
+name = "chuspa-ipc-win"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-or-later"
+authors = ["Juan Carlos Isaza <isazajuancarlos@gmail.com>"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]

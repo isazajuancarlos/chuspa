@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "Chuspa",
+  "version": "0.7.5",
+  "description": "Llaves de acceso (passkeys) de Chuspa. La bóveda vive en la aplicación, no en el navegador.",
+  "author": "Juan Carlos Isaza",
+  "homepage_url": "https://github.com/isazajuancarlos/chuspa",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA68C9FWMa8/qKVOuFIlcaYEqNsBH1VOWGTrg8CaefgLzhFzuUVG7eQBxuyqce6L2rpPz32ElxcXLKSUJ4r6vh2M5HITmkY+/8yQ2YH4ulQbrGjKvsTORc3PI/gQncol45RO9kPgiNFLiL2G1FvtgEy8dgV2LNyWVJMZQjFjasY1C+O86bJFQS9W7bd4rykrBFvOnaDTjeG0S/VYlJJnJd0isW+mFflSqSLrIiB9dLwGq0QpifRxqBgv9RqKXPsQ4gtL6LCMmAaBi8ZyE7nxmp8Hj2XwEs3X7F8wgp0PV+d50a+ceHLB4Y7kUTCpNMBgIhdVqmmEFR8+JZQyM118bqOwIDAQAB",
+  "minimum_chrome_version": "111",
+  "permissions": [
+    "nativeMessaging"
+  ],
+  "action": {
+    "default_title": "Chuspa",
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  },
+  "background": {
+    "service_worker": "fondo.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "puente-passkeys.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://*/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "passkeys.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    }
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*"
+  ]
+}

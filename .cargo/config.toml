@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# TODAS las dependencias de REGISTRO y de GIT salen de `vendor/`. No se descarga
+# nada: ni el índice de crates.io, ni un `.crate`, ni el espejo de mirilla.
+#
+# LA EXCEPCIÓN, y es por diseño: `quipu = { path = "../quipu" }`. Cargo no
+# vendoriza una dependencia por ruta —usa el árbol hermano directamente—, y eso
+# es exactamente lo que chuspa quiere: compila contra el árbol de trabajo de
+# quipu, así que un cambio en el núcleo la rompe HOY, sin esperar a una release.
+# Sigue siendo local: no toca la red. El precio es el de siempre — chuspa tiene
+# que ser hermana de quipu en el disco.
+#
+# El positivo de control NO es `--offline`, que solo prueba que no salió a la red
+# pudiendo tirar de la caché de `~/.cargo`. Lo que discrimina es la caché VACÍA:
+#
+#     CARGO_HOME=$(mktemp -d) cargo build --offline
+#
+# POR QUÉ — decisión de Juan, 2026-08-14: «no podemos depender de herramientas
+# online hasta saber que todo es seguro». El protocolo «solo local» sacó el
+# CÓDIGO de los registros; esto saca la CONSTRUCCIÓN.
+#
+# Y HAY UN ESLABÓN QUE CARGO NO VERIFICA: comprueba `Cargo.lock` ↔ campo
+# `package` y campo `files` ↔ bytes, pero NO `package` ↔ `files`. Editar un
+# archivo Y su entrada en `files` compila en silencio. Lo ancla, tras cada
+# re-vendorizado:
+#
+#     CARGO_HOME=$(mktemp -d) cargo vendor "$D" && diff -r --brief vendor "$D"
+#
+# Rutas RELATIVAS: cargo las escribe absolutas y eso ata el repo a esta máquina.
+
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+file:///home/juan/espejos/mirilla.git?rev=a5a8368"]
+git = "file:///home/juan/espejos/mirilla.git"
+rev = "a5a8368"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"

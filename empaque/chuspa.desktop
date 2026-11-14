@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Chuspa
+GenericName=Password Manager
+GenericName[es]=Gestor de contraseñas
+Comment=Offline password manager encrypted with Quipu
+Comment[es]=Gestor de contraseñas offline cifrado con Quipu
+Exec=chuspa-gtk
+Icon=chuspa
+Terminal=false
+Categories=Utility;Security;
+Keywords=password;contraseña;clave;seguridad;bóveda;
+StartupNotify=true
+SingleMainWindow=true

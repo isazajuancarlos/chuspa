@@ -1,0 +1,9 @@
+{
+  "name": "com.xiliux.chuspa",
+  "description": "Puente entre el navegador y la aplicacion Chuspa",
+  "path": "/usr/bin/chuspa-puente",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://gnnfdpkaghhjdfjjbmpknkifmicljbll/"
+  ]
+}

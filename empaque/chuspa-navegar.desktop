@@ -1,0 +1,17 @@
+[Desktop Entry]
+# Lanzador-navegador: registra chuspa-navegar como manejador de http/https para
+# que un /login o un xdg-open caigan en el perfil cifrado del navegador seguro.
+# En el PAQUETE va genérico (Exec sin ruta); el override local del usuario puede
+# fijar CHUSPA_NAVEGADOR_DIR para apuntar el volumen a un disco que sobreviva a
+# reinstalar (p. ej. /mnt/data).
+Type=Application
+Name=Navegador seguro (Chuspa)
+GenericName=Secure browser
+Comment=Abre enlaces en el perfil cifrado de Chuspa
+Comment[es]=Abre enlaces en el perfil cifrado de Chuspa
+Exec=chuspa-navegar %u
+Icon=chuspa
+Terminal=false
+Categories=Network;WebBrowser;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;text/html;
+StartupNotify=true

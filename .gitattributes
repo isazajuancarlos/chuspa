@@ -1,0 +1,8 @@
+# `vendor/` SE GUARDA BYTE A BYTE. No es estilo: es correctitud.
+#
+# Cada crate lleva un `.cargo-checksum.json` con el hash de CADA archivo, y cargo
+# lo verifica al compilar. Si git normaliza CRLF -> LF, esos hashes dejan de
+# casar y el build muere EN EL CLON, mientras aquí sigue compilando porque el
+# árbol de trabajo conserva sus bytes.
+vendor/** -text
+vendor/** -diff

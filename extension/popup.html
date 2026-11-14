@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Chuspa</title>
+<style>
+  body { font: 13px system-ui, sans-serif; margin: 0; padding: 10px; width: 300px; }
+  h1 { font-size: 13px; margin: 0 0 8px; }
+  .estado { color: #555; margin-bottom: 8px; }
+  .cerrada { color: #a00; }
+  .aviso { color: #a00; margin-top: 8px; }
+  .tenue { color: #666; font-size: 11px; margin: 4px 0 0; }
+  button { font: inherit; cursor: pointer; }
+  #permiso { border-top: 1px solid #eee; margin-top: 10px; padding-top: 8px; }
+  #permiso[hidden] { display: none; }
+</style>
+<h1>Chuspa · llaves de acceso</h1>
+<div id="estado" class="estado">Consultando…</div>
+<div id="aviso" class="aviso"></div>
+<div id="permiso" hidden>
+  <p class="aviso">
+    Las llaves de acceso (passkeys) están apagadas: el navegador no ha dado
+    permiso para actuar en las páginas.
+  </p>
+  <button id="pedir-permiso">Activar llaves de acceso</button>
+  <p class="tenue">
+    Hace falta para poder responder al sitio cuando pide la llave. Las
+    contraseñas las maneja el gestor del navegador, no esta extensión.
+  </p>
+</div>
+<script src="popup.js"></script>
